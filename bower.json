@@ -1,0 +1,21 @@
+{
+  "name": "ng-createjs",
+  "version": "0.0.1",
+  "homepage": "https://github.com/DConsulting/ng-createjs",
+  "main": ["src/ng-createjs-directives.js", "src/ng-createjs-services.js"],
+  "authors": [
+    "Angel Vladov <angel.vladov@d-consult.net>"
+  ],
+  "description": "CreateJS helper for AngularJS",
+  "keywords": [
+    "createjs",
+    "angularjs"
+  ],
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}
