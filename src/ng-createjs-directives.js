@@ -32,6 +32,7 @@
 		function FlashCanvasCtrl($scope, $element, $timeout) {
 			this.$scope = $scope;
 			this.$timeout = $timeout;
+			this.$element = $element;
 
 			this.canvasManager = new createjsUtil.FlashCanvasManager($element[0]);
 		}
@@ -39,6 +40,7 @@
 		FlashCanvasCtrl.prototype.loadScript = function() {
 			var $scope = this.$scope;
 			var $timeout = this.$timeout;
+			var $element = this.$element;
 			var assetsPath = $scope.assetsPath;
 			var basePath = $scope.basePath;
 			var ctrl = this;
@@ -57,11 +59,28 @@
 				return scriptPath;
 			};
 
-			canvasManager.prepareStage = function(stage, root) {
+			canvasManager.prepareStage = function(stage, root, lib) {
 				var opts = angular.extend({scaleX: 1, scaleY: 1}, $scope.options);
+				var ratioX = $element.prop('width') / lib.properties.width;
+				var ratioY = $element.prop('height') / lib.properties.height;
 
-				stage.scaleX = opts.scaleX;
-				stage.scaleY = opts.scaleY
+				switch ($scope.scaleMode) {
+					case 'contain':
+						ratioX = ratioY = Math.min(ratioX, ratioY);
+						stage.scaleX = ratioX;
+						stage.scaleY = ratioY;
+						break;
+
+					case 'cover':
+						stage.scaleX = ratioX;
+						stage.scaleY = ratioY;
+						break;
+
+					default:
+						// If scale mode isn't contain then we can use the custom scaling passed in the options
+						stage.scaleX = opts.scaleX;
+						stage.scaleY = opts.scaleY
+				}
 			};
 
 			canvasManager.loadScriptPromise(scriptPromise, $scope.options.root, function() {
@@ -91,7 +110,8 @@
 				basePath: '@',
 				contentScript: '@',
 				options: '=?flashCanvas',
-				publishAs: '=?'
+				publishAs: '=?',
+				scaleMode: '@'
 			},
 			require: 'flashCanvas',
 			restrict: 'AC',
@@ -99,6 +119,14 @@
 			replace: true,
 			controller: FlashCanvasCtrl,
 			link: function postLink(scope, iElement, iAttrs, ctrl) {
+				if (!iElement.attr('width')) {
+					iElement.prop('width', iElement.width());
+				}
+
+				if (!iElement.attr('height')) {
+					iElement.prop('height', iElement.height());
+				}
+
 				if ('publishAs' in iAttrs) {
 					scope.publishAs = ctrl;
 				}
