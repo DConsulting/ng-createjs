@@ -1,179 +1,104 @@
 (function() {
 	'use strict';
 
-	angular.module('ng-createjs', [
-		'ng-createjs.directives',
-		'ng-createjs.services'
-	]);
+	angular.module('ng-createjs.services', [])
 
-	angular.module('ng-createjs.directives', [
-		'ng-createjs.services'
-	])
+	.constant('createjsConfig', {
+		inCordova: 'cordova' in window,
+		soundMuted: false
+	})
 
-	.run(['createjsConfig', function(createjsConfig) {
-		// Needed by flash. Don't remove.
-		window.playSound = function(id, loop) {
-			if (!createjsConfig.soundMuted) {
-				createjs.Sound.play(id, createjs.Sound.INTERRUPT_EARLY, 0, 0, loop);
-			}
-		};
+	.factory('soundManager', function() {
+		function SoundManager() {
+			this._pendingSounds = {fx: [], bg: null};
+			this._backgroundSoundInstance = null;
+			this._registeredSounds = {};
 
-		if (createjsConfig.inCordova) {
-			// We don't care about the plugins if this is inside the browser.
-			// That why we need to know if we are in a phonegap app.
-			createjs.Sound.alternateExtensions = ["mp3", "aac", "aif", "mp4"]; // TODO: Add all supported phonegap sound formats
-			createjs.Sound.registerPlugins([createjs.PhonegapAudioPlugin]);
-		}
-	}])
-
-	.directive('flashCanvas', ['$http', function flashCanvas($http) {
-		FlashCanvasCtrl.$inject = ['$scope', '$element', '$timeout'];
-
-		function FlashCanvasCtrl($scope, $element, $timeout) {
-			this.$scope = $scope;
-			this.$timeout = $timeout;
-			this.$element = $element;
-
-			this.canvasManager = new createjsUtil.FlashCanvasManager($element[0]);
+			createjs.Sound.addEventListener('fileload', createjs.proxy(this._soundLoadHandler, this));
 		}
 
-		FlashCanvasCtrl.prototype.loadScript = function() {
-			var $scope = this.$scope;
-			var $timeout = this.$timeout;
-			var $element = this.$element;
-			var assetsPath = $scope.assetsPath;
-			var basePath = $scope.basePath;
-			var ctrl = this;
+		SoundManager.prototype._soundLoadHandler = function(e) {
+			var soundInstance;
+			var pendingSounds = this._pendingSounds;
 
-			if (basePath && basePath.charAt(basePath.length - 1) != '/') {
-				basePath += '/'; // TODO: Can't we pass this directly to the LoadQueue?
-			}
+			if (pendingSounds.fx.length) {
+				var soundIndex = -1;
 
-			var canvasManager = this.canvasManager;
-			var scriptPath = $scope.basePath + $scope.contentScript;
-			var scriptPromise = $http.get(scriptPath, {cache: true});
-
-			canvasManager.baseManifestPath(basePath + assetsPath);
-
-			canvasManager.cacheIdForPromise = function() {
-				return scriptPath;
-			};
-
-			canvasManager.prepareStage = function(stage, root, lib) {
-				var opts = angular.extend({scaleX: 1, scaleY: 1}, $scope.options);
-				var ratioX = $element.prop('width') / lib.properties.width;
-				var ratioY = $element.prop('height') / lib.properties.height;
-
-				switch ($scope.scaleMode) {
-					case 'contain':
-						ratioX = ratioY = Math.min(ratioX, ratioY);
-						stage.scaleX = ratioX;
-						stage.scaleY = ratioY;
+				for (var i = 0, len = pendingSounds.fx.length; i < len; i++) {
+					if (pendingSounds.fx[i].src === e.src) {
+						soundIndex = i;
 						break;
-
-					case 'cover':
-						stage.scaleX = ratioX;
-						stage.scaleY = ratioY;
-						break;
-
-					default:
-						// If scale mode isn't contain then we can use the custom scaling passed in the options
-						stage.scaleX = opts.scaleX;
-						stage.scaleY = opts.scaleY
-				}
-			};
-
-			canvasManager.loadScriptPromise(scriptPromise, $scope.options.root, function() {
-				$timeout(function() {
-					ctrl.stage = canvasManager.stage;
-					ctrl.root = canvasManager.root;
-
-					$scope.onLoaded({
-						stage: canvasManager.stage,
-						root: canvasManager.root
-					});
-				});
-			});
-		};
-
-		FlashCanvasCtrl.prototype.clearStage = function(destroyStage) {
-			this.canvasManager.clearStage(destroyStage);
-
-			this.stage = null;
-			this.root = null;
-		};
-
-		return {
-			scope: {
-				onLoaded: '&',
-				assetsPath: '@',
-				basePath: '@',
-				contentScript: '@',
-				options: '=?flashCanvas',
-				publishAs: '=?',
-				scaleMode: '@'
-			},
-			require: 'flashCanvas',
-			restrict: 'AC',
-			template: '<canvas>',
-			replace: true,
-			controller: FlashCanvasCtrl,
-			link: function postLink(scope, iElement, iAttrs, ctrl) {
-				if (!iElement.attr('width')) {
-					iElement.prop('width', iElement.width());
-				}
-
-				if (!iElement.attr('height')) {
-					iElement.prop('height', iElement.height());
-				}
-
-				if ('publishAs' in iAttrs) {
-					scope.publishAs = ctrl;
-				}
-
-				scope.$watch('options', function(options) {
-					if (options === undefined) return;
-
-					ctrl.clearStage(false);
-					ctrl.loadScript();
-				});
-
-				scope.$on('$destroy', function() {
-					ctrl.clearStage(true);
-					ctrl.canvasManager.dispose();
-					scope.disposed = true;
-				});
-			}
-		}
-	}])
-
-	// FIXME: Probably not the best idea to force element only, consider changes.
-	.directive('backgroundSound', ['createjsConfig', function backgroundSound(createjsConfig) {
-		return {
-			restrict: 'AC',
-			link: function(scope, iElement, iAttrs) {
-				var soundInstance = null;
-
-				if (createjsConfig.soundMuted) return;
-
-				createjs.Sound.addEventListener('fileload', createjs.proxy(loadHandler, this));
-				createjs.Sound.registerSound(iAttrs.src);
-
-				function loadHandler(e) {
-					if (iAttrs.src === e.src) {
-						soundInstance = createjs.Sound.play(iAttrs.src, createjs.Sound.INTERRUPT_EARLY, 0, 0, -1);
-						soundInstance.setVolume(0.2);
 					}
 				}
 
-				scope.$on('$destroy', function() {
-					if (soundInstance) {
-						soundInstance.stop();
-						soundInstance.removeAllEventListeners();
-					}
-				});
-			}
-		}
-	}])
+				if (soundIndex >= 0) {
+					var soundData = pendingSounds.fx.splice(soundIndex, 1)[0];
 
+					soundInstance = this._registeredSounds[e.src] = createjs.Sound.play(e.src);
+
+					if (soundData.options && soundData.options.volume) {
+						soundInstance.setVolume(soundData.options.volume);
+					}
+				}
+			}
+
+			if (!soundInstance && pendingSounds.bg === e.src) {
+				soundInstance = createjs.Sound.play(e.src, createjs.Sound.INTERRUPT_EARLY, 0, 0, -1);
+				soundInstance.setVolume(0.2);
+
+				if (soundInstance.playState === createjs.Sound.PLAY_FAILED) {
+					// Something went wrong. Most probably it's due to a lack of available channels. Play the sound manually.
+					soundInstance.play();
+				}
+
+				this._backgroundSoundInstance = soundInstance;
+				pendingSounds.bg = null;
+			}
+		};
+
+		/**
+		 * Plays an fx sound once
+		 * @param {String} src
+		 * @param {Object} sound options
+		 */
+		SoundManager.prototype.playFX = function(src, options) {
+			this._pendingSounds.fx.push({src: src, options: options});
+
+			if (this._registeredSounds[src]) {
+				this._soundLoadHandler({src: src});
+			} else {
+				var details = createjs.Sound.registerSound(src);
+			}
+
+			return details !== false;
+		};
+
+		/**
+		 * Plays a background sound. There can be only one background sound at a time.
+		 * @param {String} src
+		 */
+		SoundManager.prototype.playBackground = function(src) {
+			this._pendingSounds.bg = src;
+
+			// TODO: Unregister previous background sound if it's not an fx sound
+			var details = createjs.Sound.registerSound(src);
+
+			if (details === true) {
+				// The sound was already registered before
+				this._soundLoadHandler({src: src});
+			}
+
+			return details !== false;
+		};
+
+		SoundManager.prototype.stopBackground = function() {
+			this._pendingSounds.bg = null;
+
+			if (this._backgroundSoundInstance) {
+				// TODO: Complete
+			}
+		};
+
+		return new SoundManager();
+	});
 }) ();
