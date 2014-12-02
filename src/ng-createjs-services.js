@@ -8,7 +8,7 @@
 		soundMuted: false
 	})
 
-	.factory('soundManager', function() {
+	.factory('soundManager', ['$timeout', function($timeout) {
 		function SoundManager() {
 			this._pendingSounds = {fx: [], bg: null};
 			this._backgroundSoundInstance = null;
@@ -22,12 +22,24 @@
 			var pendingSounds = this._pendingSounds;
 
 			if (pendingSounds.fx.length) {
-				var soundIndex = pendingSounds.fx.indexOf(e.src);
+				var soundIndex = -1;
+
+				for (var i = 0, len = pendingSounds.fx.length; i < len; i++) {
+					if (pendingSounds.fx[i].src === e.src) {
+						soundIndex = i;
+						break;
+					}
+				}
 
 				if (soundIndex >= 0) {
-					pendingSounds.fx.splice(soundIndex, 1);
+					var soundData = pendingSounds.fx.splice(soundIndex, 1)[0];
+					var volumeValue = 1;
 
-					soundInstance = this._registeredSounds[e.src] = createjs.Sound.play(e.src);
+					if (soundData.options && soundData.options.volume) {
+						volumeValue = soundData.options.volume;
+					}
+
+					soundInstance = this._registeredSounds[e.src] = createjs.Sound.play(e.src, 0, 0, 0, 0, volumeValue);
 				}
 			}
 
@@ -48,14 +60,23 @@
 		/**
 		 * Plays an fx sound once
 		 * @param {String} src
+		 * @param {Object} sound options
 		 */
-		SoundManager.prototype.playFX = function(src) {
-			this._pendingSounds.fx.push(src);
+		SoundManager.prototype.playFX = function(src, options) {
+			var self = this;
+			var details = true;
+
+			this._pendingSounds.fx.push({src: src, options: options});
+
+			this._registeredSounds[src] = true;
 
 			if (this._registeredSounds[src]) {
-				this._soundLoadHandler({src: src});
+				$timeout(function() {
+					// We need this outside $apply phases or it will block drawing.
+					self._soundLoadHandler({src: src});
+				}, 0, false);
 			} else {
-				var details = createjs.Sound.registerSound(src);
+				details = createjs.Sound.registerSound(src);
 			}
 
 			return details !== false;
@@ -88,5 +109,5 @@
 		};
 
 		return new SoundManager();
-	});
+	}]);
 }) ();
