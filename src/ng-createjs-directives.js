@@ -147,7 +147,6 @@
 		}
 	}])
 
-	// FIXME: Probably not the best idea to force element only, consider changes.
 	.directive('backgroundSound', ['createjsConfig', function backgroundSound(createjsConfig) {
 		return {
 			restrict: 'AC',
