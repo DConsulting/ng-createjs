@@ -139,7 +139,7 @@
 				});
 
 				scope.$on('$destroy', function() {
-					ctrl.clearStage(true);
+					// ctrl.clearStage(true); TODO: Shouldn't we call this?
 					ctrl.canvasManager.dispose();
 					scope.disposed = true;
 				});

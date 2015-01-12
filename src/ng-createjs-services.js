@@ -8,53 +8,114 @@
 		soundMuted: false
 	})
 
-	.factory('soundManager', ['$timeout', function($timeout) {
+	.constant('soundManagerConfig', {
+		defaultPlaybackOptions: {
+			volume: 1, // Default volume
+			loop: 0, // Don't loop
+			delay: 0 // No delay
+		},
+		defaultBackgroundOptions: {
+			volume: .2,
+			loop: -1,
+			delay: 0
+		}
+	})
+
+	.factory('soundManager', ['$timeout', 'soundManagerConfig', function($timeout, soundManagerConfig) {
+
+		/**
+		 * Sound is still loading. There is an active load operation.
+		 * @type {number}
+		 */
+		SoundManager.SOUND_STATE_LOADING = 1;
+
+		/**
+		 * Sound is loaded. You can play it whenever you want.
+		 * @type {number}
+		 */
+		SoundManager.SOUND_STATE_READY = 2;
+
 		function SoundManager() {
-			this._pendingSounds = {fx: [], bg: null};
-			this._backgroundSoundInstance = null;
-			this._registeredSounds = {};
+			/**
+			 * Sound id to sound status
+			 * @private
+			 */
+			this._soundState = {};
 
 			createjs.Sound.addEventListener('fileload', createjs.proxy(this._soundLoadHandler, this));
 		}
 
+		SoundManager.prototype.config = {
+			defaultPlaybackOptions: {
+				volume: 1, // Default volume
+				loop: 0, // Don't loop
+				delay: 0, // No delay
+				offset: 0
+			},
+			defaultBackgroundOptions: {
+				volume: .2,
+				loop: -1,
+				delay: 0,
+				offset: 0
+			}
+		};
+
 		SoundManager.prototype._soundLoadHandler = function(e) {
 			var soundInstance;
-			var pendingSounds = this._pendingSounds;
+			var soundState = this._soundState[e.src];
 
-			if (pendingSounds.fx.length) {
-				var soundIndex = -1;
+			console.log(e.src);
 
-				for (var i = 0, len = pendingSounds.fx.length; i < len; i++) {
-					if (pendingSounds.fx[i].src === e.src) {
-						soundIndex = i;
-						break;
-					}
-				}
+			if (soundState) {
+				soundState.loadingInfo = SoundManager.SOUND_STATE_READY;
 
-				if (soundIndex >= 0) {
-					var soundData = pendingSounds.fx.splice(soundIndex, 1)[0];
-					var volumeValue = 1;
-
-					if (soundData.options && soundData.options.volume) {
-						volumeValue = soundData.options.volume;
-					}
-
-					soundInstance = this._registeredSounds[e.src] = createjs.Sound.play(e.src, 0, 0, 0, 0, volumeValue);
-				}
-			}
-
-			if (!soundInstance && pendingSounds.bg === e.src) {
-				soundInstance = createjs.Sound.play(e.src, createjs.Sound.INTERRUPT_EARLY, 0, 0, -1);
-				soundInstance.setVolume(0.2);
+				var soundOptions = soundState.playbackOptions;
+				var soundInstance = createjs.Sound.play(e.src, createjs.Sound.INTERRUPT_EARLY,
+					soundOptions.delay,
+					soundOptions.offset,
+					soundOptions.loop,
+					soundOptions.volume
+				);
 
 				if (soundInstance.playState === createjs.Sound.PLAY_FAILED) {
 					// Something went wrong. Most probably it's due to a lack of available channels. Play the sound manually.
 					soundInstance.play();
 				}
-
-				this._backgroundSoundInstance = soundInstance;
-				pendingSounds.bg = null;
 			}
+		};
+
+		SoundManager.prototype.playSound = function(src, options) {
+			var self = this;
+			var details = true;
+			var soundState = this._soundState[src];
+
+			if (!soundState) {
+				this._soundState[src] = soundState = {
+					loadingInfo: 0
+				};
+			}
+
+			soundState.src = src;
+			soundState.playbackOptions = angular.extend(soundManagerConfig.defaultPlaybackOptions, options);
+
+			switch (soundState.loadingInfo) {
+				case SoundManager.SOUND_STATE_LOADING:
+					// Someone already started this sound. Do nothing.
+					return true;
+
+				case SoundManager.SOUND_STATE_READY:
+					$timeout(function() {
+						// We need this outside $apply phases or it will block drawing.
+						self._soundLoadHandler({src: src});
+					}, 0, false);
+					break;
+
+				default:
+					soundState.loadingInfo = SoundManager.SOUND_STATE_LOADING;
+					details = createjs.Sound.registerSound(src);
+					break;
+			}
+			return details !== false;
 		};
 
 		/**
@@ -63,49 +124,20 @@
 		 * @param {Object} sound options
 		 */
 		SoundManager.prototype.playFX = function(src, options) {
-			var self = this;
-			var details = true;
-
-			this._pendingSounds.fx.push({src: src, options: options});
-
-			this._registeredSounds[src] = true;
-
-			if (this._registeredSounds[src]) {
-				$timeout(function() {
-					// We need this outside $apply phases or it will block drawing.
-					self._soundLoadHandler({src: src});
-				}, 0, false);
-			} else {
-				details = createjs.Sound.registerSound(src);
-			}
-
-			return details !== false;
+			return this.playSound(src, options);
 		};
 
 		/**
 		 * Plays a background sound. There can be only one background sound at a time.
+		 * TODO: Add a ways to differentiate background sound from regular sounds.
 		 * @param {String} src
 		 */
 		SoundManager.prototype.playBackground = function(src) {
-			this._pendingSounds.bg = src;
-
-			// TODO: Unregister previous background sound if it's not an fx sound
-			var details = createjs.Sound.registerSound(src);
-
-			if (details === true) {
-				// The sound was already registered before
-				this._soundLoadHandler({src: src});
-			}
-
-			return details !== false;
+			return this.playSound(src, soundManagerConfig.defaultBackgroundOptions);
 		};
 
 		SoundManager.prototype.stopBackground = function() {
-			this._pendingSounds.bg = null;
-
-			if (this._backgroundSoundInstance) {
-				// TODO: Complete
-			}
+			// TODO: Complete
 		};
 
 		return new SoundManager();

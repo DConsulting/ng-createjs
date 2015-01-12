@@ -1,2 +1,12 @@
+Version 0.0.4
+- soundManager directive rewritten from scratch - improved readability and simplified logic.
+
+Version 0.0.3
+- Timeout fix and allow sounds to play more than once
+- Added support for fx sound options: volume setup
+
+Version 0.0.2
+- Fixed some typos and added comments
+
 Version 0.0.1
 - Initial structure
