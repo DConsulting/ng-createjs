@@ -18,12 +18,12 @@
 			}
 		};
 
-		if (createjsConfig.inCordova) {
+		//if (createjsConfig.inCordova) {
 			// We don't care about the plugins if this is inside the browser.
 			// That why we need to know if we are in a phonegap app.
-			createjs.Sound.alternateExtensions = ["mp3", "aac", "aif", "mp4"]; // TODO: Add all supported phonegap sound formats
-			createjs.Sound.registerPlugins([createjs.PhonegapAudioPlugin]);
-		}
+			//createjs.Sound.alternateExtensions = ["mp3", "aac", "aif", "mp4"];
+			//createjs.Sound.registerPlugins([createjs.PhonegapAudioPlugin]);
+		//}
 	}])
 
 	.directive('flashCanvas', ['$http', function flashCanvas($http) {
@@ -148,10 +148,13 @@
 	}])
 
 	.directive('backgroundSound', ['createjsConfig', function backgroundSound(createjsConfig) {
+		var DEFAULT_VOLUME = 0.2;
+
 		return {
 			restrict: 'AC',
 			link: function(scope, iElement, iAttrs) {
 				var soundInstance = null;
+				var pendingMute = false;
 
 				if (createjsConfig.soundMuted) return;
 
@@ -161,8 +164,19 @@
 				function loadHandler(e) {
 					if (iAttrs.src === e.src) {
 						soundInstance = createjs.Sound.play(iAttrs.src, createjs.Sound.INTERRUPT_EARLY, 0, 0, -1);
-						soundInstance.setVolume(0.2);
+						soundInstance.setVolume(pendingMute ? 0 : DEFAULT_VOLUME);
+						pendingMute = false;
 					}
+				}
+
+				if ('muteIf' in iAttrs) {
+					scope.$watch(iAttrs.muteIf, function(value) {
+						if (soundInstance) {
+							soundInstance.setVolume(value ? 0 : DEFAULT_VOLUME);
+						}  else {
+							pendingMute = value;
+						}
+					});
 				}
 
 				scope.$on('$destroy', function() {
@@ -174,5 +188,4 @@
 			}
 		}
 	}])
-
 }) ();

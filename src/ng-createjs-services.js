@@ -61,10 +61,7 @@
 		};
 
 		SoundManager.prototype._soundLoadHandler = function(e) {
-			var soundInstance;
 			var soundState = this._soundState[e.src];
-
-			console.log(e.src);
 
 			if (soundState) {
 				soundState.loadingInfo = SoundManager.SOUND_STATE_READY;
