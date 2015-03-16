@@ -1,5 +1,6 @@
 Version 0.0.4
 - soundManager directive rewritten from scratch - improved readability and simplified logic.
+- directives changed to work with the new LowLatencyAudio plugin implementation from soundjs-phonegap 0.0.3
 
 Version 0.0.3
 - Timeout fix and allow sounds to play more than once
