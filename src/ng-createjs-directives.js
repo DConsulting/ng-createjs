@@ -18,6 +18,12 @@
 			}
 		};
 
+        if ('cordova' in window) {
+            //createjs.HTMLAudioPlugin.enableIOS = true;
+            createjs.Sound.alternateExtensions = ["mp3", "aac", "aif", "mp4"];
+            createjs.Sound.registerPlugins([createjs.LowLatencyAudioPlugin]);
+        }
+
 		//if (createjsConfig.inCordova) {
 			// We don't care about the plugins if this is inside the browser.
 			// That why we need to know if we are in a phonegap app.
@@ -188,4 +194,5 @@
 			}
 		}
 	}])
+
 }) ();
