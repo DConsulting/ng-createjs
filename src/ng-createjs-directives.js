@@ -49,7 +49,7 @@
 			});
 		}
 
-		EventDispatcher.superOf(FlashCanvasCtrl);
+		phonegular.extendClass(FlashCanvasCtrl, EventDispatcher);
 
 		FlashCanvasCtrl.prototype.loadScript = function() {
 			var $scope = this.$scope;
