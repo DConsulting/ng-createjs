@@ -32,16 +32,24 @@
 		//}
 	}])
 
-	.directive('flashCanvas', ['$http', function flashCanvas($http) {
+	.directive('flashCanvas', ['$http', 'EventDispatcher', function flashCanvas($http, EventDispatcher) {
 		FlashCanvasCtrl.$inject = ['$scope', '$element', '$timeout'];
 
 		function FlashCanvasCtrl($scope, $element, $timeout) {
+			EventDispatcher.call(this);
+
+			var self = this;
 			this.$scope = $scope;
 			this.$timeout = $timeout;
 			this.$element = $element;
 
 			this.canvasManager = new createjsUtil.FlashCanvasManager($element[0]);
+			this.canvasManager.on(createjsUtil.FlashCanvasManager.Events.STAGE_DESTROY, function() {
+				self.trigger('destroy');
+			});
 		}
+
+		EventDispatcher.superOf(FlashCanvasCtrl);
 
 		FlashCanvasCtrl.prototype.loadScript = function() {
 			var $scope = this.$scope;
@@ -153,46 +161,67 @@
 		}
 	}])
 
-	.directive('backgroundSound', ['createjsConfig', function backgroundSound(createjsConfig) {
+	.directive('backgroundSound', ['createjsConfig', '$timeout', function backgroundSound(createjsConfig, $timeout) {
 		var DEFAULT_VOLUME = 0.2;
 
 		return {
 			restrict: 'AC',
-			link: function(scope, iElement, iAttrs) {
+			link: function (scope, iElement, iAttrs) {
 				var soundInstance = null;
 				var pendingMute = false;
 
 				if (createjsConfig.soundMuted) return;
 
-				createjs.Sound.addEventListener('fileload', createjs.proxy(loadHandler, this));
-				createjs.Sound.registerSound(iAttrs.src);
-
 				function loadHandler(e) {
 					if (iAttrs.src === e.src) {
+						createjs.Sound.removeEventListener('fileload', loadHandler);
 						soundInstance = createjs.Sound.play(iAttrs.src, createjs.Sound.INTERRUPT_EARLY, 0, 0, -1);
 						soundInstance.setVolume(pendingMute ? 0 : DEFAULT_VOLUME);
+
+						if (soundInstance.playState === createjs.Sound.PLAY_FAILED) {
+							// Something went wrong. Most probably it's due to a lack of available channels. Play the sound manually.
+							soundInstance.play();
+						}
+
 						pendingMute = false;
 					}
 				}
 
 				if ('muteIf' in iAttrs) {
-					scope.$watch(iAttrs.muteIf, function(value) {
+					scope.$watch(iAttrs.muteIf, function (value) {
 						if (soundInstance) {
 							soundInstance.setVolume(value ? 0 : DEFAULT_VOLUME);
-						}  else {
+						} else {
 							pendingMute = value;
 						}
 					});
 				}
 
-				scope.$on('$destroy', function() {
+				scope.$on('$destroy', function () {
+					createjs.Sound.removeEventListener('fileload', loadHandler);
+
 					if (soundInstance) {
 						soundInstance.stop();
 						soundInstance.removeAllEventListeners();
+
+						try {
+							createjs.Sound.removeSound(iAttrs.src);
+						} catch(e) {
+							// OK, createjs removeSound crashes sometimes when duration is missing.
+						}
 					}
 				});
+
+				createjs.Sound.addEventListener('fileload', loadHandler);
+				var response = createjs.Sound.registerSound(iAttrs.src);
+
+				if (response === true) {
+					$timeout(function() {
+						loadHandler({src: iAttrs.src});
+					}, 0, false);
+				}
 			}
 		}
-	}])
+	}]);
 
 }) ();
