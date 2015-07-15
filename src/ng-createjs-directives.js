@@ -23,7 +23,6 @@
             createjs.Sound.alternateExtensions = ["mp3", "aac", "aif", "mp4"];
             createjs.Sound.registerPlugins([createjs.LowLatencyAudioPlugin]);
         }
-
 		//if (createjsConfig.inCordova) {
 			// We don't care about the plugins if this is inside the browser.
 			// That why we need to know if we are in a phonegap app.
@@ -39,17 +38,53 @@
 			EventDispatcher.call(this);
 
 			var self = this;
+			var events = createjsUtil.FlashCanvasManager.Events;
+
 			this.$scope = $scope;
 			this.$timeout = $timeout;
 			this.$element = $element;
 
 			this.canvasManager = new createjsUtil.FlashCanvasManager($element[0]);
-			this.canvasManager.on(createjsUtil.FlashCanvasManager.Events.STAGE_DESTROY, function() {
+
+			this.canvasManager.on(events.STAGE_DESTROY, function() {
 				self.trigger('destroy');
+			});
+
+			this.canvasManager.on(events.LOAD_MANIFEST, function(e) {
+				var spriteSheets = self._parseSpriteSheets($scope.spriteSheets, $scope.basePath);
+				var queue = e.loadQueue;
+
+				angular.forEach(spriteSheets, function(file) {
+					queue.loadFile(file, true);
+				})
 			});
 		}
 
 		phonegular.extendClass(FlashCanvasCtrl, EventDispatcher);
+
+			/**
+			 * @param {String} rawSpriteSheets Raw string as it comes from the attribute
+			 * @param [String] basePath
+			 * @returns {Array}
+			 * @private
+			 */
+		FlashCanvasCtrl.prototype._parseSpriteSheets = function(rawSpriteSheets, basePath) {
+			if (!rawSpriteSheets) return [];
+
+			var spriteSheets = rawSpriteSheets.split(',');
+			var trimRegex = /^\s+|\s+$/g;
+
+			return spriteSheets.map(function(spriteSheet) {
+				var sheetUrl = spriteSheet.replace(trimRegex, '');
+				var sheetId = sheetUrl.substr(sheetUrl.lastIndexOf('/') + 1);
+
+				return {
+					src: sheetUrl + '.json',
+					type: 'spritesheet',
+					id: sheetId
+				};
+			});
+		};
 
 		FlashCanvasCtrl.prototype.loadScript = function() {
 			var $scope = this.$scope;
@@ -57,12 +92,14 @@
 			var $element = this.$element;
 			var assetsPath = $scope.assetsPath;
 			var basePath = $scope.basePath;
+
 			var ctrl = this;
 
 			if (basePath && basePath.charAt(basePath.length - 1) != '/') {
 				basePath += '/'; // TODO: Can't we pass this directly to the LoadQueue?
 			}
 
+			var rootName = $scope.options.root;
 			var canvasManager = this.canvasManager;
 			var scriptPath = $scope.basePath + $scope.contentScript;
 			var scriptPromise = $http.get(scriptPath, {cache: true});
@@ -97,17 +134,19 @@
 				}
 			};
 
-			canvasManager.loadScriptPromise(scriptPromise, $scope.options.root, function() {
-				$timeout(function() {
-					ctrl.stage = canvasManager.stage;
-					ctrl.root = canvasManager.root;
+			canvasManager.loadScriptPromise(scriptPromise, rootName,
+				function() {
+					$timeout(function() {
+						ctrl.stage = canvasManager.stage;
+						ctrl.root = canvasManager.root;
 
-					$scope.onLoaded({
-						stage: canvasManager.stage,
-						root: canvasManager.root
+						$scope.onLoaded({
+							stage: canvasManager.stage,
+							root: canvasManager.root
+						});
 					});
-				});
-			});
+				}
+			);
 		};
 
 		FlashCanvasCtrl.prototype.clearStage = function(destroyStage) {
@@ -121,6 +160,7 @@
 			scope: {
 				onLoaded: '&',
 				assetsPath: '@',
+				spriteSheets: '@', // sprite-sheets="home/images/home_atlas_"
 				basePath: '@',
 				contentScript: '@',
 				options: '=?flashCanvas',
