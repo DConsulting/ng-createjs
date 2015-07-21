@@ -46,8 +46,12 @@
 
 			this.canvasManager = new createjsUtil.FlashCanvasManager($element[0]);
 
+			this.canvasManager.on(events.DISPOSE, function() {
+				self.trigger(events.DISPOSE);
+			});
+
 			this.canvasManager.on(events.STAGE_DESTROY, function() {
-				self.trigger('destroy');
+				self.trigger(events.STAGE_DESTROY);
 			});
 
 			this.canvasManager.on(events.LOAD_MANIFEST, function(e) {
@@ -62,12 +66,16 @@
 
 		phonegular.extendClass(FlashCanvasCtrl, EventDispatcher);
 
-			/**
-			 * @param {String} rawSpriteSheets Raw string as it comes from the attribute
-			 * @param [String] basePath
-			 * @returns {Array}
-			 * @private
-			 */
+		FlashCanvasCtrl.prototype.isDisposed = function() {
+			return this.canvasManager && this.canvasManager.isDisposed();
+		};
+
+		/**
+		 * @param {String} rawSpriteSheets Raw string as it comes from the attribute
+		 * @param [String] basePath
+		 * @returns {Array}
+		 * @private
+		 */
 		FlashCanvasCtrl.prototype._parseSpriteSheets = function(rawSpriteSheets, basePath) {
 			if (!rawSpriteSheets) return [];
 
