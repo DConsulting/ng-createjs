@@ -18,11 +18,10 @@
 			}
 		};
 
-        if ('cordova' in window) {
-            //createjs.HTMLAudioPlugin.enableIOS = true;
-            createjs.Sound.alternateExtensions = ["mp3", "aac", "aif", "mp4"];
-            createjs.Sound.registerPlugins([createjs.LowLatencyAudioPlugin]);
-        }
+        createjs.Sound.alternateExtensions = ["mp3", "aac", "aif", "mp4"];
+		createjs.Sound.registerPlugins([createjs.LazyWebAudioPlugin]);
+
+
 		//if (createjsConfig.inCordova) {
 			// We don't care about the plugins if this is inside the browser.
 			// That why we need to know if we are in a phonegap app.
@@ -209,65 +208,120 @@
 		}
 	}])
 
-	.directive('backgroundSound', ['createjsConfig', '$timeout', function backgroundSound(createjsConfig, $timeout) {
-		var DEFAULT_VOLUME = 0.2;
+	.directive('backgroundSound', ['createjsConfig', function backgroundSound(createjsConfig) {
+
+		BackgroundSoundCtrl.$inject = ['$scope', '$http', '$q', '$timeout'];
+		function BackgroundSoundCtrl($scope, $http, $q, $timeout) {
+			var audioCtx = createjs.LazyWebAudioPlugin._context;
+			var ctrl = this;
+
+			$scope.bufferData = null;
+
+			this.preload = function() {
+				var def = $q.defer();
+
+				$http.get($scope.src, {responseType: 'arraybuffer'}).then(
+					function onSuccess(response) {
+						audioCtx.decodeAudioData(response.data, function(buffer) {
+							$timeout(function () {
+								$scope.bufferData = buffer;
+								def.resolve();
+							});
+						});
+					},
+					function onError() {
+						def.reject();
+					}
+				);
+
+				return def.promise;
+			};
+
+			this.createBufferSource = function() {
+				if (!$scope.bufferData) {
+					throw 'BufferData is missing.';
+				}
+
+				$scope.bufferSource = audioCtx.createBufferSource();
+				$scope.soundGain = audioCtx.createGain();
+				$scope.soundGain.volume = 1;
+
+				$scope.bufferSource.buffer = $scope.bufferData;
+				$scope.bufferSource.connect($scope.soundGain);
+				$scope.bufferSource.onended = function() {
+					$scope.playing = false;
+					ctrl.stop();
+				};
+
+				$scope.soundGain.connect(audioCtx.destination);
+				$scope.soundGain.value = $scope.volume;
+			};
+
+			this.play = function() {
+				if (!$scope.playing) {
+					if (!$scope.bufferSource) {
+						ctrl.createBufferSource();
+					}
+
+					$scope.playing = true;
+					$scope.bufferSource.loop = true;
+					$scope.bufferSource.start(0);
+				}
+			};
+
+			this.stop = function() {
+				if ($scope.bufferSource) {
+					if ($scope.playing) {
+						$scope.bufferSource.stop(0);
+					}
+
+					$scope.playing = false;
+					$scope.soundGain.disconnect();
+					$scope.bufferSource.disconnect();
+					$scope.bufferSource.onended = null;
+					$scope.bufferSource = null;
+					$scope.soundGain = null;
+				}
+			};
+
+			$scope.$on('$destroy', function() {
+				ctrl.stop();
+			});
+		}
 
 		return {
 			restrict: 'AC',
-			link: function (scope, iElement, iAttrs) {
-				var soundInstance = null;
-				var pendingMute = false;
-
+			require: 'backgroundSound',
+			controller: BackgroundSoundCtrl,
+			scope: {
+				src: '@',
+				playWhen: '=?'
+			},
+			link: function (scope, iElement, iAttrs, ctrl) {
 				if (createjsConfig.soundMuted) return;
 
-				function loadHandler(e) {
-					if (iAttrs.src === e.src) {
-						createjs.Sound.removeEventListener('fileload', loadHandler);
-						soundInstance = createjs.Sound.play(iAttrs.src, createjs.Sound.INTERRUPT_EARLY, 0, 0, -1);
-						soundInstance.setVolume(pendingMute ? 0 : DEFAULT_VOLUME);
+				var srcUnwatch = scope.$watch('src', function(src) {
+					if (src) {
+						ctrl.preload().then(function() {
+							ctrl.createBufferSource();
 
-						if (soundInstance.playState === createjs.Sound.PLAY_FAILED) {
-							// Something went wrong. Most probably it's due to a lack of available channels. Play the sound manually.
-							soundInstance.play();
-						}
+							if ('playWhen' in iAttrs) {
+								scope.$watch('playWhen', function(value) {
+									if (value) {
+										ctrl.play();
+									} else {
+										ctrl.stop();
+									}
+								});
+							} else {
+								ctrl.play();
+							}
 
-						pendingMute = false;
-					}
-				}
+						});
 
-				if ('muteIf' in iAttrs) {
-					scope.$watch(iAttrs.muteIf, function (value) {
-						if (soundInstance) {
-							soundInstance.setVolume(value ? 0 : DEFAULT_VOLUME);
-						} else {
-							pendingMute = value;
-						}
-					});
-				}
-
-				scope.$on('$destroy', function () {
-					createjs.Sound.removeEventListener('fileload', loadHandler);
-
-					if (soundInstance) {
-						soundInstance.stop();
-						soundInstance.removeAllEventListeners();
-
-						try {
-							createjs.Sound.removeSound(iAttrs.src);
-						} catch(e) {
-							// OK, createjs removeSound crashes sometimes when duration is missing.
-						}
+						srcUnwatch();
 					}
 				});
-
-				createjs.Sound.addEventListener('fileload', loadHandler);
-				var response = createjs.Sound.registerSound(iAttrs.src);
-
-				if (response === true) {
-					$timeout(function() {
-						loadHandler({src: iAttrs.src});
-					}, 0, false);
-				}
 			}
 		}
 	}]);

@@ -5,6 +5,7 @@
 
 	.constant('createjsConfig', {
 		inCordova: 'cordova' in window,
+		forgetBufferOnClean: false, // Will be passed to the LazyWebAudio
 		soundMuted: false
 	})
 
