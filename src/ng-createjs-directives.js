@@ -1,3 +1,4 @@
+/* global angular */
 (function() {
 	'use strict';
 
@@ -222,12 +223,13 @@
 
 				$http.get($scope.src, {responseType: 'arraybuffer'}).then(
 					function onSuccess(response) {
-						audioCtx.decodeAudioData(response.data, function(buffer) {
-							$timeout(function () {
+						$timeout(function () {
+							audioCtx.decodeAudioData(response.data, function(buffer) {
 								$scope.bufferData = buffer;
 								def.resolve();
+								$scope.$digest();
 							});
-						});
+						}, 0, false);
 					},
 					function onError() {
 						def.reject();
@@ -286,6 +288,7 @@
 
 			$scope.$on('$destroy', function() {
 				ctrl.stop();
+				$scope.bufferData = null;
 			});
 		}
 

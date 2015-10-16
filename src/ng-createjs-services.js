@@ -22,7 +22,7 @@
 		}
 	})
 
-	.factory('soundManager', ['$timeout', 'soundManagerConfig', function($timeout, soundManagerConfig) {
+	.factory('soundManager', ['$timeout', '$q', 'soundManagerConfig', function($timeout, $q, soundManagerConfig) {
 
 		/**
 		 * Sound is still loading. There is an active load operation.
@@ -62,6 +62,8 @@
 		};
 
 		SoundManager.prototype._soundLoadHandler = function(e) {
+			var def = $q.defer();
+
 			var soundState = this._soundState[e.src];
 
 			if (soundState) {
@@ -75,14 +77,30 @@
 					soundOptions.volume
 				);
 
+				soundInstance.on('complete', function() {
+					$timeout(function() {
+						def.resolve();
+					});
+				});
+
+				soundInstance.on('failed', function(e) {
+					$timeout(function() {
+						def.reject(e);
+					});
+				});
+
 				if (soundInstance.playState === createjs.Sound.PLAY_FAILED) {
 					// Something went wrong. Most probably it's due to a lack of available channels. Play the sound manually.
 					soundInstance.play();
 				}
 			}
+
+			return def.promise;
 		};
 
 		SoundManager.prototype.playSound = function(src, options) {
+			var def = $q.defer();
+
 			var self = this;
 			var details = true;
 			var soundState = this._soundState[src];
@@ -99,21 +117,33 @@
 			switch (soundState.loadingInfo) {
 				case SoundManager.SOUND_STATE_LOADING:
 					// Someone already started this sound. Do nothing.
-					return true;
+					def.resolve(true);
+					break;
 
 				case SoundManager.SOUND_STATE_READY:
 					$timeout(function() {
 						// We need this outside $apply phases or it will block drawing.
-						self._soundLoadHandler({src: src});
+						self._soundLoadHandler({src: src}).then(
+							function onSoundFinishSuccess() {
+								def.resolve(details !== false);
+							}, function onSoundFinishError(e) {
+								def.resolve(details !== false);
+							}
+						);
 					}, 0, false);
 					break;
 
 				default:
 					soundState.loadingInfo = SoundManager.SOUND_STATE_LOADING;
 					details = createjs.Sound.registerSound(src);
+
+					def.resolve(details !== false);
 					break;
 			}
-			return details !== false;
+
+			return def.promise;
+
+			//return details !== false;
 		};
 
 		/**
