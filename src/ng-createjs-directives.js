@@ -209,7 +209,7 @@
 		}
 	}])
 
-	.directive('backgroundSound', ['createjsConfig', function backgroundSound(createjsConfig) {
+	.directive('backgroundSound', ['createjsConfig', '$timeout', function backgroundSound(createjsConfig, $timeout) {
 
 		BackgroundSoundCtrl.$inject = ['$scope', '$http', '$q', '$timeout'];
 		function BackgroundSoundCtrl($scope, $http, $q, $timeout) {
@@ -298,7 +298,8 @@
 			controller: BackgroundSoundCtrl,
 			scope: {
 				src: '@',
-				playWhen: '=?'
+				playWhen: '=?',
+				onReady: '&'
 			},
 			link: function (scope, iElement, iAttrs, ctrl) {
 				if (createjsConfig.soundMuted) return;
@@ -307,6 +308,10 @@
 					if (src) {
 						ctrl.preload().then(function() {
 							ctrl.createBufferSource();
+
+							$timeout(function() {
+								scope.onReady();
+							});
 
 							if ('playWhen' in iAttrs) {
 								scope.$watch('playWhen', function(value) {
