@@ -1,3 +1,8 @@
+Version 0.1.0
+- reusable canvas directive added
+- switched to WebAudioPlugin
+- code cleanup. removed unnecessary dependencies
+
 Version 0.0.4
 - soundManager directive rewritten from scratch - improved readability and simplified logic.
 - directives changed to work with the new LowLatencyAudio plugin implementation from soundjs-phonegap 0.0.3

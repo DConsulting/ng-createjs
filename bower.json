@@ -1,6 +1,6 @@
 {
   "name": "ng-createjs",
-  "version": "0.0.4",
+  "version": "0.1.0",
   "homepage": "https://github.com/DConsulting/ng-createjs",
   "main": ["src/ng-createjs-directives.js", "src/ng-createjs-services.js"],
   "authors": [
